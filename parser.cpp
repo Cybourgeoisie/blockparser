@@ -89,6 +89,12 @@ static double getMem() {
     static const uint32_t gExpectedMagic = 0xdbb6c0fb;
 #endif
 
+#if defined DECRED 
+    static const size_t gHeaderSize = 80;
+    static auto kCoinDirName = ".dcrd";
+    static const uint32_t gExpectedMagic = 0xd9b400f9;
+#endif
+
 #if defined DARKCOIN
     static const size_t gHeaderSize = 80;
     static auto kCoinDirName = ".darkcoin";
@@ -712,6 +718,7 @@ static void getBlockHeader(
 
     LOAD(uint32_t, magic, p);
     if(unlikely(gExpectedMagic!=magic)) {
+        info("Expected magic (%u) does not equal found magic (%u)", gExpectedMagic, magic);
         hash = 0;
         return;
     }
@@ -722,6 +729,7 @@ static void getBlockHeader(
 
     hash = allocHash256();
 
+    // DECRED: I don't know which hash function DCR uses
     #if defined(DARKCOIN)
         h9(hash, p, gHeaderSize);
     #elif defined(PAYCON)
@@ -950,7 +958,12 @@ static void findBlockFiles() {
     auto oldStyle = (r<0 || !S_ISDIR(statBuf.st_mode));
 
     int blkDatId = (oldStyle ? 1 : 0);
+#if !defined(DECRED)
     auto fmt = oldStyle ? "/blk%04d.dat" : "/blocks/blk%05d.dat";
+#else
+    auto fmt = "/data/mainnet/blocks_ffldb/%09d.fdb";
+#endif
+
     while(1) {
 
         char buf[64];

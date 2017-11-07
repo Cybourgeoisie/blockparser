@@ -555,6 +555,10 @@ static int getCoinType() {
             48
         #endif
 
+        #if defined(DECRED)
+            1855
+        #endif
+
         #if defined(BITCOIN)
             0
         #endif
@@ -617,6 +621,7 @@ bool addrToHash160(
         BN_add_word(sum, dg);
     }
 
+    // DECRED TEST: Leaving this alone, expecting to see an additional byte come back
     uint8_t buf[4 + 2 + kRIPEMD160ByteSize + 4];
     size_t size = BN_bn2mpi(sum, 0);
     if(sizeof(buf)<size) {
@@ -665,12 +670,22 @@ bool addrToHash160(
     bool hashOK = true;
     if(checkHash) {
 
+#if !defined(DECRED)
         uint8_t data[1+kRIPEMD160ByteSize];
         memcpy(1+data, hash160, kRIPEMD160ByteSize);
         data[0] = getCoinType();
-
-        uint8_t sha[kSHA256ByteSize];
+	uint8_t sha[kSHA256ByteSize];
         sha256Twice(sha, data, 1+kRIPEMD160ByteSize);
+#else
+        uint8_t data[2+kRIPEMD160ByteSize];
+        memcpy(2+data, hash160, kRIPEMD160ByteSize);
+	int data_prefix;
+        data_prefix = getCoinType();
+	data[0] = (data_prefix >> 8) & 0xff;
+        data[1] = (data_prefix >> 0) & 0xff;
+	uint8_t sha[kSHA256ByteSize];
+        sha256Twice(sha, data, 2+kRIPEMD160ByteSize);
+#endif
 
         hashOK =
             sha[0]==checkSumStart[0]  &&
@@ -703,19 +718,29 @@ void hash160ToAddr(
              bool pad,
           uint8_t type
 ) {
-    uint8_t buf[4 + 2 + kRIPEMD160ByteSize + kSHA256ByteSize];
-    const uint32_t size = 4 + 2 + kRIPEMD160ByteSize;
-    memcpy(4 + 2 + buf, hash160, kRIPEMD160ByteSize);
+    int prefixPad = 1;
+#if defined(DECRED)
+    prefixPad = 2;
+#endif
+    uint8_t buf[4 + 1 + prefixPad + kRIPEMD160ByteSize + kSHA256ByteSize];
+    const uint32_t size = 4 + 1 + prefixPad + kRIPEMD160ByteSize;
+    memcpy(4 + 1 + prefixPad + buf, hash160, kRIPEMD160ByteSize);
     buf[ 0] = (size>>24) & 0xff;
     buf[ 1] = (size>>16) & 0xff;
     buf[ 2] = (size>> 8) & 0xff;
     buf[ 3] = (size>> 0) & 0xff;
     buf[ 4] = 0;
+#if !defined(DECRED)
     buf[ 5] = getCoinType() + type;
+#else
+    int coinType = getCoinType() + type;
+    buf[ 5] = (coinType>>8) & 0xff;
+    buf[ 6] = (coinType>>0) & 0xff; 
+#endif
     sha256Twice(
-        4 + 2 + kRIPEMD160ByteSize + buf,
-        4 + 1 + buf,
-        1 + kRIPEMD160ByteSize
+        4 + 1 + prefixPad + kRIPEMD160ByteSize + buf,
+        4 + prefixPad + buf,
+        prefixPad + kRIPEMD160ByteSize
     );
 
     static BIGNUM *b58 = 0;
@@ -748,7 +773,7 @@ void hash160ToAddr(
     }
 
     const uint8_t *a =                          (5+buf);
-    const uint8_t *e = 1 + kRIPEMD160ByteSize + (5+buf);
+    const uint8_t *e = prefixPad + kRIPEMD160ByteSize + (5+buf);
     while(a<e && 0==a[0]) {
         *(p++) = b58Digits[0];
         ++a;
@@ -995,6 +1020,10 @@ const char *getInterestingAddr() {
     #elif defined(LITECOIN)
 
         "LKvTVnkK2rAkJXfgPdkaDRgvEGvazxWS9o"
+
+    #elif defined(DECRED)
+
+        "DsXDFHNjBoB5GoYxXULdQY1JVtWuXxPzz66"
 
     #elif defined(DARKCOIN)
 
